@@ -57,7 +57,7 @@ class RobotGroundTruth:
         @param move_right - the probability of actually moving right """
 
         # Bayes assignment
-        # TODO
+        # GUIDE:
         #   Set self.move_probabilities["move_left"] = {...} to be a dictionary with the above probabilities
         #     Yes, you can store dictionaries in dictionaries
         # Check that the probabilities sum to one and are between 0 and 1
@@ -70,10 +70,12 @@ class RobotGroundTruth:
         @param move_right - the probability of actually moving right """
 
         # Bayes assignment
-        # TODO
+        # GUIDE:
         #   Set self.move_probabilities["move_right"] = {...} to be a dictionary with the above probabilities
         #     Yes, you can store dictionaries in dictionaries
         # Check that the probabilities sum to one and are between 0 and 1
+        # Use "move_left" and "move_right" for the keys for the two dictionaries and
+        #   "left", "right", and "stay" for the key values for the probabilities 
 
         # YOUR CODE HERE
 
@@ -83,7 +85,7 @@ class RobotGroundTruth:
         @param sigma - standard deviation of noise"""
 
         # Kalman assignment
-        # TODO
+        # GUIDE:
         #   Set self.move_probabilities["move_continuous"] = {...} to be a dictionary with the above probabilities
         # Check that sigma is positive
 
@@ -131,7 +133,7 @@ class RobotGroundTruth:
         @return The amount actually moved """
 
         # Bayes assignment
-        # TODO
+        # GUIDE:
         #  Set step_dir to -1 (left), 0 (stay put) or 1 (right) based on sampling the move_left variable
         step_dir = 0
 

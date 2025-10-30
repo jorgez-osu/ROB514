@@ -35,7 +35,7 @@ class KalmanFilter:
         @param robot_sensors - for mu/sigma of wall sensor
         @param dist_reading - distance reading returned by sensor"""
 
-        # TODO: Calculate C and K, then update self.mu and self.sigma
+        # GUIDE: Calculate C and K, then update self.mu and self.sigma
         # YOUR CODE HERE
         return self.mu, self.sigma
 
@@ -49,7 +49,7 @@ class KalmanFilter:
         @param amount : The control signal (the amount the robot was requested to move
         @return : mu and sigma of new current estimated location """
 
-        # TODO: Update mu and sigma by Ax + Bu equation
+        # GUIDE: Update mu and sigma by Ax + Bu equation
         # YOUR CODE HERE
         return self.mu, self.sigma
 
@@ -65,7 +65,7 @@ class KalmanFilter:
         @param u will be the amount moved
         @param z will be the wall distance sensor reading
         """
-        # TODO:
+        # GUIDE:
         #  Step 1 predict: update your belief by the action (move the Gaussian)
         #  Step 2 correct: do the correction step (move the Gaussian to be between the current mean and the sensor reading)
         # YOUR CODE HERE
