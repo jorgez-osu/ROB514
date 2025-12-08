@@ -2,7 +2,6 @@
 
 import numpy as np
 
-
 # This class keeps track of the "ground truth" of the robot's location
 #  - where the robot actually is
 #  - moves the robot in the direction asked, with some noise
@@ -63,6 +62,23 @@ class RobotGroundTruth:
         # Check that the probabilities sum to one and are between 0 and 1
 
         # YOUR CODE HERE
+    
+        stay = 1.0 - move_left - move_right
+
+        # Sanity checks
+        if not (0.0 <= move_left <= 1.0 and
+                0.0 <= move_right <= 1.0 and
+                0.0 <= stay <= 1.0):
+            raise ValueError("Probabilities must be between 0 and 1 and sum to 1.")
+
+        if not np.isclose(move_left + move_right + stay, 1.0):
+            raise ValueError("Probabilities must sum to 1.")
+
+        self.move_probabilities["move_left"] = {
+            "left": move_left,
+            "right": move_right,
+            "stay": stay
+        }
 
     def set_move_right_probabilities(self, move_left=0.05, move_right=0.8):
         """ Set the three discrete probabilities for moving right (should sum to one and all be positive)
@@ -78,6 +94,22 @@ class RobotGroundTruth:
         #   "left", "right", and "stay" for the key values for the probabilities 
 
         # YOUR CODE HERE
+        stay = 1.0 - move_left - move_right
+
+        # Sanity checks
+        if not (0.0 <= move_left <= 1.0 and
+                0.0 <= move_right <= 1.0 and
+                0.0 <= stay <= 1.0):
+            raise ValueError("Probabilities must be between 0 and 1 and sum to 1.")
+
+        if not np.isclose(move_left + move_right + stay, 1.0):
+            raise ValueError("Probabilities must sum to 1.")
+
+        self.move_probabilities["move_right"] = {
+            "left": move_left,
+            "right": move_right,
+            "stay": stay
+        }   
 
     def set_move_continuos_probabilities(self, sigma=0.1):
         """ Set the noise for continuous movement
@@ -90,7 +122,16 @@ class RobotGroundTruth:
         # Check that sigma is positive
 
         # YOUR CODE HERE
+        # added by JZ begin TMP
+        if sigma <= 0:
+            raise ValueError("Sigma must be positive")
 
+        # You can keep this simple: just store sigma
+        self.move_probabilities["move_continuous"] = {
+            "sigma": float(sigma)
+        }
+        # added by JZ end TMP
+        
     # Just a helper function to place robot in middle of bin
     def _adjust_middle_of_bin(self, n_divs):
         """ Helper function to place robot in middle of bin
@@ -135,9 +176,23 @@ class RobotGroundTruth:
         # Bayes assignment
         # GUIDE:
         #  Set step_dir to -1 (left), 0 (stay put) or 1 (right) based on sampling the move_left variable
-        step_dir = 0
+        # step_dir = 0
 
         # YOUR CODE HERE
+        probs = self.move_probabilities["move_left"]
+        p_left = probs["left"]
+        p_right = probs["right"]
+        p_stay = probs["stay"]
+
+        # One sample from uniform[0,1)
+        u = np.random.uniform()
+
+        if u < p_left:
+            step_dir = -1
+        elif u < p_left + p_stay:
+            step_dir = 0
+        else:
+            step_dir = 1
 
         # This returns the actual move amount, clamped to 0, 1
         #   i.e., don't run off the end of the hallway
@@ -150,9 +205,22 @@ class RobotGroundTruth:
 
         # Bayes assignment
         # Set step_dir to -1 (left), 0 (stay put) or 1 (right) based on sampling the move_right variable
-        step_dir = 0
+        # step_dir = 0
 
         # YOUR CODE HERE
+        probs = self.move_probabilities["move_right"]
+        p_left = probs["left"]
+        p_right = probs["right"]
+        p_stay = probs["stay"]
+
+        u = np.random.uniform()
+
+        if u < p_left:
+            step_dir = -1
+        elif u < p_left + p_stay:
+            step_dir = 0
+        else:
+            step_dir = 1
 
         return self._move_clamped_discrete(step_dir * step_size)
 
@@ -163,10 +231,21 @@ class RobotGroundTruth:
 
         # Kalman assignment
         # Set noisy_amount to be the amount to move, plus noise
-        noisy_amount = amount
+        #noisy_amount = amount commented out by JZ
 
         # YOUR CODE HERE
+        # added by JZ begin TEMP
+        params = self.move_probabilities.get("move_continuous", None)
+        if params is None or "sigma" not in params:
+            raise ValueError("Continuous move probabilities not set. "
+                            "Call set_move_continuos_probabilities() first.")
 
+        sigma = params["sigma"]
+
+        # Amount plus zero-mean Gaussian noise
+        noise = np.random.normal(loc=0.0, scale=sigma)
+        noisy_amount = amount + noise
+        # added by JZ end TEMP
         # Actually move (don't run off of end)
         return self._move_clamped_continuous(noisy_amount)
 

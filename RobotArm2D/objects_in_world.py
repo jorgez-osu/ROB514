@@ -119,6 +119,15 @@ def get_pts_as_numpy_array(obj):
     # GUIDE: Create a 3xn numpy array, with the last row 1's, and the points filled
     #  in from the obj["XYs"] key-value
     # YOUR CODE HERE
+    # added by JZ begin
+        # obj["XYs"] is a list of [x, y] pairs
+    xy = np.array(obj["XYs"])           # shape (n, 2)
+    xy = xy.T                           # shape (2, n)
+
+    n = xy.shape[1]
+    pts = np.ones((3, n))               # last row all 1s
+    pts[0:2, :] = xy                    # first two rows are x and y
+    # added by JZ end
     return pts
 
 

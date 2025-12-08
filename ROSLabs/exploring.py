@@ -19,6 +19,8 @@ import numpy as np
 
 # Your path planning code
 import path_planning as path_planning
+from collections import deque
+
 
 
 # -------------- Showing start and end and path ---------------
@@ -105,8 +107,32 @@ def is_reachable(im, pix):
     #  False otherwise
     # You can use four or eight connected - eight will return more points
     # YOUR CODE HERE
-    return False
+    i, j = pix
+    height, width = im.shape
 
+    # Bounds check
+    if not (0 <= i < width and 0 <= j < height):
+        return False
+
+    # This frontier definition: the pixel itself must be UNSEEN
+    if not path_planning.is_unseen(im, pix):
+        return False
+
+    # 8-connected neighbours around (i, j)
+    neighbour_offsets = [
+        (-1, -1), (0, -1), (1, -1),
+        (-1,  0),          (1,  0),
+        (-1,  1), (0,  1), (1,  1),
+    ]
+
+    # At least one neighbour should be FREE
+    for di, dj in neighbour_offsets:
+        ni, nj = i + di, j + dj
+        if 0 <= ni < width and 0 <= nj < height:
+            if path_planning.is_free(im, (ni, nj)):
+                return True
+
+    return False
 
 def find_all_possible_goals(im):
     """ Find all of the places where you have a pixel that is unseen next to a pixel that is free
@@ -116,7 +142,15 @@ def find_all_possible_goals(im):
     @return dictionary or list or binary image of possible pixels"""
 
     # YOUR CODE HERE
+    height, width = im.shape
+    frontier_points = []
 
+    for i in range(width):
+        for j in range(height):
+            if is_reachable(im, (i, j)):
+                frontier_points.append((i, j))
+
+    return frontier_points
 
 def find_best_point(im, possible_points, robot_loc):
     """ Pick one of the unseen points to go to
@@ -125,7 +159,86 @@ def find_best_point(im, possible_points, robot_loc):
     @param robot_loc - location of the robot (in case you want to factor that in)
     """
     # YOUR CODE HERE
+    height, width = im.shape
 
+    # Normalize possible_points into a list of (i, j) unseen frontier pixels
+    if isinstance(possible_points, dict):
+        frontier_pixels = list(possible_points.keys())
+    elif isinstance(possible_points, np.ndarray):
+        ys, xs = np.nonzero(possible_points)
+        frontier_pixels = list(zip(xs, ys))
+    else:
+        frontier_pixels = list(possible_points)
+
+    # Quick sanity check: if nothing to explore, stay where you are
+    if not frontier_pixels:
+        return robot_loc
+
+    # -----------------------------
+    # 1) BFS from robot to find reachable FREE cells
+    # -----------------------------
+    reachable = np.zeros((height, width), dtype=bool)
+    q = deque()
+
+    # Only start BFS if the robot is on free space
+    if path_planning.is_free(im, robot_loc):
+        rx, ry = robot_loc
+        reachable[ry, rx] = True
+        q.append(robot_loc)
+
+    while q:
+        x, y = q.popleft()
+        for nx, ny in path_planning.eight_connected((x, y)):
+            if 0 <= nx < width and 0 <= ny < height:
+                if not reachable[ny, nx] and path_planning.is_free(im, (nx, ny)):
+                    reachable[ny, nx] = True
+                    q.append((nx, ny))
+
+    # -----------------------------
+    # 2) For each frontier pixel, look for reachable FREE neighbours
+    # -----------------------------
+    candidate_goals = []
+
+    neighbour_offsets = [
+        (-1, -1), (0, -1), (1, -1),
+        (-1,  0),          (1,  0),
+        (-1,  1), (0,  1), (1,  1),
+    ]
+
+    for fx, fy in frontier_pixels:
+        # Only consider valid frontier pixels
+        if not (0 <= fx < width and 0 <= fy < height):
+            continue
+        if not path_planning.is_unseen(im, (fx, fy)):
+            continue
+
+        # Find free, reachable neighbours around this unseen frontier pixel
+        for dx, dy in neighbour_offsets:
+            gx, gy = fx + dx, fy + dy
+            if 0 <= gx < width and 0 <= gy < height:
+                if path_planning.is_free(im, (gx, gy)) and reachable[gy, gx]:
+                    candidate_goals.append((gx, gy))
+
+    # If we somehow didn't find any reachable neighbour goals, fall back
+    if not candidate_goals:
+        return robot_loc
+
+    # -----------------------------
+    # 3) Pick the reachable goal closest to the robot
+    # -----------------------------
+    rx, ry = robot_loc
+    best_pt = None
+    best_dist2 = None
+
+    for gx, gy in candidate_goals:
+        dx = gx - rx
+        dy = gy - ry
+        dist2 = dx * dx + dy * dy
+        if best_dist2 is None or dist2 < best_dist2:
+            best_dist2 = dist2
+            best_pt = (gx, gy)
+
+    return best_pt
 
 def find_waypoints(im, path):
     """ Place waypoints along the path
@@ -135,6 +248,27 @@ def find_waypoints(im, path):
 
     # Again, no right answer here
     # YOUR CODE HERE
+    if path is None:
+        return None
+
+    n = len(path)
+    if n <= 2:
+        # Already just start and goal.
+        return path
+
+    # Aim for roughly 8 waypoints (including start and goal).
+    desired_waypoints = 8
+    step = max(1, n // desired_waypoints)
+
+    waypoints = []
+    for idx in range(0, n, step):
+        waypoints.append(path[idx])
+
+    # Ensure the goal is included as the final waypoint.
+    if waypoints[-1] != path[-1]:
+        waypoints.append(path[-1])
+
+    return waypoints
 
 if __name__ == '__main__':
     im, im_thresh = path_planning.open_image("map.pgm")

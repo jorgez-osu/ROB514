@@ -37,6 +37,37 @@ class KalmanFilter:
 
         # GUIDE: Calculate C and K, then update self.mu and self.sigma
         # YOUR CODE HERE
+        """sensor_params = robot_sensors.sensor_probabilities["wall_dist"]
+        sigma_z = sensor_params["sigma"]
+
+        C = 1.0
+        sigma_prior_sq = self.sigma ** 2
+        sigma_z_sq = sigma_z ** 2
+
+        # Kalman gain K
+        K = sigma_prior_sq * C / (C**2 * sigma_prior_sq + sigma_z_sq)
+
+        # Posterior mean and variance
+        mu_post = self.mu + K * (dist_reading - C * self.mu)
+        sigma_post_sq = (1.0 - K * C) * sigma_prior_sq
+
+        self.mu = mu_post
+        self.sigma = np.sqrt(sigma_post_sq)"""
+        
+        # Get sensor noise (standard deviation)
+        sensor_params = robot_sensors.sensor_probabilities["wall_dist"]
+        sigma_z = sensor_params["sigma"]
+
+        # Simplified 1D Kalman correction in terms of standard deviations
+        # K = sigma_prior / (sigma_prior + sigma_sensor)
+        K = self.sigma / (self.sigma + sigma_z)
+
+        # Update mean
+        self.mu = self.mu + K * (dist_reading - self.mu)
+
+        # Update standard deviation
+        self.sigma = (1.0 - K) * self.sigma
+
         return self.mu, self.sigma
 
     # Given a movement, update Gaussian
@@ -51,6 +82,20 @@ class KalmanFilter:
 
         # GUIDE: Update mu and sigma by Ax + Bu equation
         # YOUR CODE HERE
+        # Kalman assignment: prediction step
+        # Motion model: x' = A x + B u + w, w ~ N(0, sigma_move^2), with A = 1, B = 1
+        move_params = robot_ground_truth.move_probabilities["move_continuous"]
+        sigma_move = move_params["sigma"]
+
+        A = 1.0
+        B = 1.0
+
+        # Predicted mean (standard 1D motion model x' = A x + B u)
+        self.mu = A * self.mu + B * amount
+        # The prediction step adds standard deviations directly (NOT variances)
+        # sigma_new = sigma_old + sigma_move
+        self.sigma = self.sigma + sigma_move
+
         return self.mu, self.sigma
 
     def one_full_update(self, robot_ground_truth, robot_sensor, u: float, z: float):
@@ -69,6 +114,12 @@ class KalmanFilter:
         #  Step 1 predict: update your belief by the action (move the Gaussian)
         #  Step 2 correct: do the correction step (move the Gaussian to be between the current mean and the sensor reading)
         # YOUR CODE HERE
+    
+        # Step 1: predict (use control u)
+        self.update_continuous_move(robot_ground_truth, u)
+
+        # Step 2: correct (use sensor reading z)
+        self.update_belief_distance_sensor(robot_sensor, z)
 
 
 

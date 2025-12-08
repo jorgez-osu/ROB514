@@ -40,6 +40,8 @@ def make_scale_matrix(scale_x=1.0, scale_y=1.0):
     mat = np.identity(3)
     # GUIDE: set the relevant values of mat
     # YOUR CODE HERE
+    mat[0, 0] = scale_x # added by JZ
+    mat[1, 1] = scale_y # added by JZ
 
     return mat
 
@@ -53,7 +55,8 @@ def make_translation_matrix(d_x=0.0, d_y=0.0):
     mat = np.identity(3)
     # GUIDE: set the relevant values of mat
     # YOUR CODE HERE
-
+    mat[0, 2] = d_x # added by JZ
+    mat[1, 2] = d_y # added by JZ
     return mat
 
 
@@ -66,7 +69,12 @@ def make_rotation_matrix(theta=0.0):
     mat = np.identity(3)
     # GUIDE: set the relevant values of mat
     # YOUR CODE HERE
-
+    c = np.cos(theta) # added by JZ
+    s = np.sin(theta) # added by JZ
+    mat[0, 0] = c # added by JZ
+    mat[0, 1] = -s # added by JZ
+    mat[1, 0] = s # added by JZ
+    mat[1, 1] = c # added by JZ
     return mat
 
 
@@ -123,6 +131,7 @@ def make_matrix_from_sequence(seq):
         # GUIDE: multiply next_mat by mat and store the result in mat
         #    (reminder: @ is matrix multiplication)
         # YOUR CODE HERE
+        mat = next_mat @ mat # added by JZ
     return mat
 
 
@@ -144,6 +153,16 @@ def get_sx_sy_from_matrix(mat):
     #   third coordinate, since vectors do not have a location
     # np.linalg.norm() will get the length of the vector
     # YOUR CODE HERE
+    x_axis = np.array([1.0, 0.0, 0.0]) # added by JZ
+    y_axis = np.array([0.0, 1.0, 0.0]) # added by JZ
+
+    x_rot = mat @ x_axis # added by JZ
+    y_rot = mat @ y_axis # added by JZ
+
+    sx = np.linalg.norm(x_rot[:2]) # added by JZ
+    sy = np.linalg.norm(y_rot[:2]) # added by JZ
+
+    return sx, sy # added by JZ
 
 
 def get_dx_dy_from_matrix(mat):
@@ -158,6 +177,9 @@ def get_dx_dy_from_matrix(mat):
     #   Multiply the origin by the matrix then return the x and y components
     # Reminder: @ is the matrix multiplication
     # YOUR CODE HERE
+    origin = np.array([0.0, 0.0, 1.0]) # added by JZ
+    pt = mat @ origin # added by JZ
+    return pt[0], pt[1] # added by JZ
 
 
 # Doing this one in two pieces - first, get out how the axes (1,0) and (0,1) are transformed, then in the mext
@@ -172,6 +194,14 @@ def get_axes_from_matrix(mat):
     #  2) Set y_axis to be a unit vector pointing down the y axis
     #  Multiply by the matrix to get the new "x" and "y" axes
     # YOUR CODE HERE
+    x_axis = np.array([1.0, 0.0, 0.0]) # added by JZ
+    y_axis = np.array([0.0, 1.0, 0.0]) # added by JZ
+
+    x_rot = mat @ x_axis # added by JZ
+    y_rot = mat @ y_axis # added by JZ
+
+    # Return just the 2D directions (x, y) # added by JZ
+    return x_rot[:2], y_rot[:2] # added by JZ
 
 
 def get_theta_from_matrix(mat):
@@ -185,6 +215,8 @@ def get_theta_from_matrix(mat):
     #   Use the x axis because theta for the x axis is 0 (makes the math easier)
     # Reminder: arctan2 takes (y, x)
     # YOUR CODE HERE
+    x_axis, _ = get_axes_from_matrix(mat) # added by JZ
+    return np.arctan2(x_axis[1], x_axis[0]) # added by JZ
 
 
 # -------------------------------- Check and test routines ------------------------------
@@ -203,7 +235,30 @@ def check_is_rotation(mat, b_print=False):
     #       Return FALSE otherwise
     #       If b_print_test is True, also print out why the rotation matrix failed
     # YOUR CODE HERE
-    return True
+    x_axis, y_axis = get_axes_from_matrix(mat) # added by JZ
+    len_x = np.linalg.norm(x_axis) # added by JZ
+    len_y = np.linalg.norm(y_axis) # added by JZ
+    dot = np.dot(x_axis, y_axis) # added by JZ
+
+    is_unit = np.isclose(len_x, 1.0) and np.isclose(len_y, 1.0) # added by JZ
+    is_orth = np.isclose(dot, 0.0) # added by JZ
+
+    # No translation and standard homogeneous bottom row
+    has_no_translation = np.isclose(mat[0, 2], 0.0) and np.isclose(mat[1, 2], 0.0) # added by JZ
+    bottom_ok = np.allclose(mat[2, :], np.array([0.0, 0.0, 1.0])) # added by JZ
+
+    is_rot = is_unit and is_orth and has_no_translation and bottom_ok # added by JZ
+
+    if not is_rot and b_print: # added by JZ
+        if not is_unit: # added by JZ
+            print("Axes are not unit length:", len_x, len_y) # added by JZ
+        if not is_orth:
+            print("Axes are not orthogonal; dot =", dot) # added by JZ
+        if not has_no_translation: # added by JZ
+            print("Matrix has translation components:", mat[0, 2], mat[1, 2]) # added by JZ
+        if not bottom_ok: # added by JZ
+            print("Bottom row is not [0, 0, 1]:", mat[2, :]) # added by JZ
+    return is_rot # added by JZ
 
 
 # Check if flip/mirror
@@ -223,6 +278,10 @@ def check_is_mirrored(mat):
     #  Step 3: Check that the resulting vector points in the positive z direction (x and y values are 0, z is positive)
     #  Note: Only the DIRECTION matters - not how long the vector is
     # YOUR CODE HERE
+    x_axis, y_axis = get_axes_from_matrix(mat) # added by JZ
+    # Compute z-component of cross product to determine handedness # added by JZ
+    cross_z = x_axis[0] * y_axis[1] - x_axis[1] * y_axis[0] # added by JZ
+    return cross_z < 0.0 # added by JZ
 
 
 # Check if skewed/not angle-preserving
@@ -243,6 +302,9 @@ def check_preserves_angles(mat):
     #  Step 3: Check that the angle between them is 90 degrees (reminder, numpy does everything in radians)
     #    Actually, you can just check that the dot product is close to 0
     # YOUR CODE HERE
+    x_axis, y_axis = get_axes_from_matrix(mat) # added by JZ
+    dot = np.dot(x_axis, y_axis) # added by JZ
+    return np.isclose(dot, 0.0) # added by JZ
 
 
 # Check/test functions for autograder
@@ -365,6 +427,9 @@ def make_pts_representing_circle(n_pts=25):
     #   see numpy array math
     # Step 3: Do the same for the y values, but set to sin(t)
     # YOUR CODE HERE
+    pts = np.ones((3, n_pts)) # added by JZ
+    pts[0, :] = np.cos(ts) # added by JZ
+    pts[1, :] = np.sin(ts) # added by JZ
     return pts
 
 
@@ -409,6 +474,7 @@ def plot_axes_and_circle(axs, mat):
 
     # GUIDE: Transform circle by mat and put new points in pts_moved
     # YOUR CODE HERE
+    pts_moved = mat @ pts  # added by JZ
     axs.plot(pts_moved[0, :], pts_moved[1, :], ':g')
 
 
@@ -451,17 +517,33 @@ def example_order_matters():
     #   Set mat to be a translation, rotation matrix (same params as above)
     axs[0, 1].set_title("Trans rot")
     # YOUR CODE HERE
+    seq_trans_rot = [ # addedy by JZ
+        {"type": "translate", "dx": 1, "dy": 2}, # addedy by JZ
+        {"type": "rotate", "theta": np.pi / 4.0}, # addedy by JZ
+    ] # addedy by JZ
+    mat = make_matrix_from_sequence(seq_trans_rot) # addedy by JZ
     plot_axes_and_circle(axs[0, 1], mat)
 
     # GUIDE Now do a matrix (mat) that is a scale 0.5,2.0, rotate pi/4, translate (1,2)
     # YOUR CODE HERE
-
+    seq_scl_rot_trans = [ # addedy by JZ
+        {"type": "scale", "sx": 0.5, "sy": 2.0}, # addedy by JZ
+        {"type": "rotate", "theta": np.pi / 4.0}, # addedy by JZ
+        {"type": "translate", "dx": 1, "dy": 2}, # addedy by JZ
+    ] # addedy by JZ
+    mat = make_matrix_from_sequence(seq_scl_rot_trans) # addedy by JZ
     axs[1, 0].set_title("Scl rot trans")
     plot_axes_and_circle(axs[1, 0], mat)
 
     # Reverse the order of operations
     # GUIDE Now do a matrix (mat) that is the REVERSE of the scale, rotate, translate
     # YOUR CODE HERE
+    seq_trans_rot_scl = [ # addedy by JZ
+        {"type": "translate", "dx": 1, "dy": 2}, # addedy by JZ
+        {"type": "rotate", "theta": np.pi / 4.0}, # addedy by JZ
+        {"type": "scale", "sx": 0.5, "sy": 2.0}, # addedy by JZ
+    ] # addedy by JZ
+    mat = make_matrix_from_sequence(seq_trans_rot_scl) # addedy by JZ
     axs[1, 1].set_title("Trans rot scl")
 
     plot_axes_and_circle(axs[1, 1], mat)
@@ -477,7 +559,10 @@ def example_weird_geometry():
     #  (see mirrored figure in slides https://docs.google.com/presentation/d/1iTi45y5AghMZRgStPX4mPdR7uYFQdRBjaekOW7ESTxM/edit?usp=sharing)
     # Should be a scale followed by a translate
     # YOUR CODE HERE
-
+    seq_mirrored = [ # addedy by JZ
+        {"type": "scale", "sx": 2.0, "sy": -1.0}, # addedy by JZ
+        {"type": "translate", "dx": 2.5, "dy": 2.5}, # addedy by JZ
+    ] # addedy by JZ
     mat = make_matrix_from_sequence(seq_mirrored)
     # print(f"{mat}")
     axs[0].set_title("Mirrored")
@@ -488,6 +573,11 @@ def example_weird_geometry():
     #  One of the simplest is to rotate then scale x differently than y
     #  Draw the the flipped geometry at 2.5 2.5 (see skewed figure in slides https://docs.google.com/presentation/d/1iTi45y5AghMZRgStPX4mPdR7uYFQdRBjaekOW7ESTxM/edit?usp=sharing)
     # YOUR CODE HERE
+    seq_skew = [ # addedy by JZ
+        {"type": "rotate", "theta": np.pi / 6.0}, # addedy by JZ
+        {"type": "scale", "sx": 1.5, "sy": 0.75}, # addedy by JZ
+        {"type": "translate", "dx": 2.5, "dy": 2.5}, # addedy by JZ
+    ] # addedy by JZ
 
     mat = make_matrix_from_sequence(seq_skew)
     # print(f"{mat}")
@@ -509,6 +599,17 @@ def example_uncentered_geometry():
     #  Rotating the original geometry so that the x axis is "up"
     # Note: You can use the make_x_matrix commands to move the points
     # YOUR CODE HERE
+    trans_ll = make_translation_matrix(1.0, 1.0) # added by JZ
+    rot_x_up = make_rotation_matrix(np.pi / 2.0) # added by JZ
+
+    pts_circle_lower_left_origin = trans_ll @ pts_circle # added by JZ
+    pts_zigzag_lower_left_origin = trans_ll @ pts_zigzag # added by JZ
+
+    pts_circle_x_up = rot_x_up @ pts_circle # added by JZ
+    pts_zigzag_x_up = rot_x_up @ pts_zigzag # added by JZ
+
+    pts_circle_x_up_lower_left_origin = trans_ll @ (rot_x_up @ pts_circle) # added by JZ
+    pts_zigzag_x_up_lower_left_origin = trans_ll @ (rot_x_up @ pts_zigzag) # added by JZ
 
     seq_scl_rot_trans = [{"type":"scale", "sx":0.5, "sy":0.75},
                          {"type":"rotate", "theta": np.pi/3.0},

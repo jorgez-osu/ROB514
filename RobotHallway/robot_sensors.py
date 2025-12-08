@@ -23,6 +23,11 @@ class RobotSensors:
         # Note: The actual values in the dictionaries will be set in the calls to set_* below
         # Second note: all variables should be referenced with self. or they will disappear
         # YOUR CODE HERE
+        self.sensor_probabilities = {
+            "door": {},        # filled in by set_door_sensor_probabilites()
+            "no_door": {},     # filled in by set_door_sensor_probabilites()
+            "wall_dist": {}    # filled in by set_distance_wall_sensor_probabilities()
+        }
 
         # In the GUI version, these will be called with values from the GUI after the RobotSensors instance
         #   has been created
@@ -40,6 +45,22 @@ class RobotSensors:
         #  Reminder: You should have created the dictionary to hold the dictionaries in the __init__ method above
         #  Second note: all variables should be referenced with self.
         # YOUR CODE HERE
+        # Bayes assignment
+        # If door is actually present:
+        #   - Return True with probability in_prob_see_door_if_door
+        #   - Return False otherwise
+        self.sensor_probabilities["door"] = {
+            True:  float(in_prob_see_door_if_door),
+            False: 1.0 - float(in_prob_see_door_if_door)
+        }
+
+        # If door is NOT present:
+        #   - Return True with probability in_prob_see_door_if_not_door (false positive)
+        #   - Return False otherwise
+        self.sensor_probabilities["no_door"] = {
+            True:  float(in_prob_see_door_if_not_door),
+            False: 1.0 - float(in_prob_see_door_if_not_door)
+        }
 
     def set_distance_wall_sensor_probabilities(self, sigma=0.1):
         """ Setup the wall sensor probabilities (store them in the dictionary)
@@ -49,6 +70,14 @@ class RobotSensors:
         # Kalman assignment
         # GUIDE: Store the mean and standard deviation
         # YOUR CODE HERE
+        if sigma <= 0:
+            raise ValueError("Sigma must be positive")
+
+        # Store Gaussian parameters (mean 0, std = sigma)
+        self.sensor_probabilities["wall_dist"] = {
+            "mean": 0.0,
+            "sigma": float(sigma)
+        }
 
     def query_door(self, robot_gt, world_gt):
         """ Query the door sensor
@@ -72,6 +101,21 @@ class RobotSensors:
         # Note: This is just the sample_boolean code from your probabilities assignment
         # YOUR CODE HERE
 
+        # Choose which dictionary to use
+        if is_in_front_of_door:
+            probs = self.sensor_probabilities["door"]
+        else:
+            probs = self.sensor_probabilities["no_door"]
+
+        # STEP 1 — sample a uniform random number
+        u = np.random.uniform()
+
+        # STEP 2 — return True/False based on probability
+        if u < probs[True]:
+            return True
+        else:
+            return False
+
     def query_distance_to_wall(self, robot_gt):
         """ Return a distance reading (with correct noise) of the robot's location
         This returns the estimated robot's location by measuring the distance to the left/right walls - i.e., it
@@ -83,6 +127,16 @@ class RobotSensors:
         # GUIDE: Return the distance to the wall (with noise)
         #  This is the Gaussian assignment from your probabilities homework
         # YOUR CODE HERE
+    
+        params = self.sensor_probabilities["wall_dist"]
+        mu_noise = params.get("mean", 0.0)
+        sigma_noise = params["sigma"]
+
+        # Zero-mean Gaussian noise with std = sigma
+        noise = np.random.normal(loc=mu_noise, scale=sigma_noise)
+
+        # Robot's true location plus noise
+        return robot_gt.robot_loc + noise
 
 
 def test_discrete_sensors(b_print=True):

@@ -21,59 +21,83 @@ def read_and_cluster_image(image_name, use_hsv, n_clusters):
     @use_hsv - use hsv, y/n
     @n_clusters - number of clusters (up to 6)"""
 
-    # Read in the file
-    im_orig = imageio.imread("Data/" + image_name)
-    # Make sure you just have rgb (for those images with an alpha channel)
-    im_orig = im_orig[:, :, 0:3]
+    try:
+        im_orig = imageio.imread("Data/" + image_name)
+    except FileNotFoundError:
+        im_orig = imageio.imread(image_name)
 
-    # The plot to put the images in
+    im_orig = im_orig[:, :, 0:3]
+    height, width, channels = im_orig.shape
+
     fig, axs = plt.subplots(1, 3, figsize=(12, 4))
 
-    # Make name for the image from the input parameters
     str_im_name = image_name.split('.')[0] + " "
     if use_hsv:
         str_im_name += "HSV"
     else:
         str_im_name += "RGB"
-
     str_im_name += f", k={n_clusters}"
 
-    # This is how you draw an image in a matplotlib figure
     axs[0].imshow(im_orig)
-    # This sets the title
     axs[0].set_title(str_im_name)
+    axs[0].axis("off")
 
-    # TODO
-    # Step 1: If use_hsv is true, convert the image to hsv (see skimage rgb2hsv - skimage has a ton of these
-    #  conversion routines)
-    # Step 2: reshape the data to be an nx3 matrix
-    #   kmeans assumes each row is a data point. So you have to give it a (widthXheight) X 3 matrix, not the image
-    #   data as-is (WXHX3). See numpy reshape.
-    # Step 3: Whiten the data
-    # Step 4: Call kmeans with the whitened data to get out the centers
-    #   Note: kmeans returns a tuple with the centers in the first part and the overall fit in the second
-    # Step 5: Get the ids out using vq
-    #   This also returns a tuple; the ids for each pixel are in the first part
-    #   You might find the syntax data[ids == i, 0:3] = rgb_color[i] useful - this gets all the data elements
-    #     with ids with value i and sets them to the color in rgb_color
-    # Step 5: Create a mask image, and set the colors by rgb_color[ id for pixel ]
-    # Step 6: Create a second mask image, setting the color to be the average color of the cluster
-    #    Two ways to do this
-    #       1) "undo" the whitening step on the returned cluster (harder)
-    #       2) Calculate the means of the clusters in the original data
-    #           np.mean(data[ids == c])
-    #
-    # Note: To do the HSV option, get the RGB version to work. Then go back and do the HSV one
-    #   Simplest way to do this: Copy the code you did before and re-do after converting to hsv first
-    #     Don't forget to take the color centers in the *original* image, not the hsv one
-    #     Don't forget to rename your variables
-    #   More complicated: Make a function. Most of the code is the same, except for a conversion to hsv at the beginning
+    if use_hsv:
+        im_for_kmeans = rgb2hsv(im_orig.astype(np.float32) / 255.0)
+    else:
+        im_for_kmeans = im_orig.astype(np.float32)
 
-    # An array of some default color values to use for making the rgb mask image
-    rgb_color = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0], [0, 255, 255], [255, 0, 255]]
-    # YOUR CODE HERE
+    data = im_for_kmeans.reshape(-1, 3)
+
+    whitened = whiten(data)
+    centers, _ = kmeans(whitened, n_clusters)
+    ids, _ = vq(whitened, centers)  
+
+    rgb_color = np.array(
+        [[255,   0,   0],   # red
+         [  0, 255,   0],   # green
+         [  0,   0, 255],   # blue
+         [255, 255,   0],   # yellow
+         [  0, 255, 255],   # cyan
+         [255,   0, 255]],  # magenta
+        dtype=np.float32
+    )
+
+    if n_clusters > rgb_color.shape[0]:
+        raise ValueError("n_clusters must be <= 6 for the predefined colors")
+
+    N = height * width
+    mask_by_id_flat = np.zeros((N, 3), dtype=np.float32)
+    mask_by_mean_flat = np.zeros((N, 3), dtype=np.float32)
+
+    rgb_data = im_orig.reshape(-1, 3).astype(np.float32)
+
+    for k in range(n_clusters):
+        in_cluster = (ids == k)
+        if not np.any(in_cluster):
+            continue
+
+        mask_by_id_flat[in_cluster] = rgb_color[k]
+
+        mean_color = np.mean(rgb_data[in_cluster], axis=0)
+        mask_by_mean_flat[in_cluster] = mean_color
+
+    mask_by_id = mask_by_id_flat.reshape(height, width, 3).astype(im_orig.dtype)
+    mask_by_mean = mask_by_mean_flat.reshape(height, width, 3).astype(im_orig.dtype)
+
+
+    axs[1].imshow(mask_by_id)
     axs[1].set_title("ID colored by rgb")
+    axs[1].axis("off")
+
+    axs[2].imshow(mask_by_mean)
     axs[2].set_title("ID colored by cluster average")
+    axs[2].axis("off")
+
+    fig.tight_layout()
+
+    return ids.reshape(height, width)
+
 
 
 if __name__ == '__main__':

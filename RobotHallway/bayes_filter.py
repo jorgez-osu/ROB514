@@ -28,6 +28,8 @@ class BayesFilter:
 
         # TODO create an array with n_bins, set to uniform distribution
         # YOUR CODE HERE
+        p = 1.0 / n_bins
+        self.probabilities = np.full(n_bins, p, dtype=float)
 
     def update_belief_sensor_reading(self, world_ground_truth, robot_sensor, sensor_reading):
         """ Update your probabilities based on the sensor reading being true (door) or false (no door)
@@ -53,6 +55,36 @@ class BayesFilter:
         # You might find enumerate useful
         #  for i, p in enumerate(self.probabilities):
         # YOUR CODE HERE
+        n_bins = len(self.probabilities)
+        div_bins = 1.0 / n_bins
+
+        # New array for unnormalized posterior
+        new_probs = np.zeros(n_bins, dtype=float)
+
+        for i, p_prior in enumerate(self.probabilities):
+            # Location of the center of this bin
+            loc = (i + 0.5) * div_bins
+
+            # Is this bin in front of a door in the true world?
+            is_door_here = world_ground_truth.is_location_in_front_of_door(loc)
+
+            # Pick the right conditional probability P(z | x)
+            if is_door_here:
+                probs = robot_sensor.sensor_probabilities["door"]
+            else:
+                probs = robot_sensor.sensor_probabilities["no_door"]
+
+            p_y_given_x = probs[sensor_reading]   # sensor_reading is True or False
+
+            # Bayes numerator: P(z | x) * P(x)
+            new_probs[i] = p_y_given_x * p_prior
+
+        # Normalize (divide by nu)
+        nu = np.sum(new_probs)
+        if nu > 0.0:
+            new_probs /= nu
+
+        self.probabilities = new_probs
 
     def update_belief_move_left(self, robot_ground_truth):
         """ Update the probabilities assuming a move left.
@@ -70,6 +102,38 @@ class BayesFilter:
         #  one already - any error is just numerical
 
         # YOUR CODE HERE
+        n_bins = len(self.probabilities)
+        new_probs = np.zeros(n_bins, dtype=float)
+
+        # Get motion model for command "move_left"
+        move_model = robot_ground_truth.move_probabilities["move_left"]
+        p_left = move_model["left"]
+        p_right = move_model["right"]
+        p_stay = move_model["stay"]
+
+        # For each previous bin j, distribute its probability to possible new bins
+        for j, p_prev in enumerate(self.probabilities):
+            # Try to move left
+            target = j - 1
+            if target < 0:
+                target = j        # would fall off hallway → stays
+            new_probs[target] += p_prev * p_left
+
+            # Try to move right (wrong direction)
+            target = j + 1
+            if target >= n_bins:
+                target = j
+            new_probs[target] += p_prev * p_right
+
+            # Stay put
+            new_probs[j] += p_prev * p_stay
+
+        # Normalize (should already be ~1, but just in case)
+        total = np.sum(new_probs)
+        if total > 0.0:
+            new_probs /= total
+
+        self.probabilities = new_probs
 
     def update_belief_move_right(self, robot_ground_truth):
         """ Update the probabilities assuming a move right.
@@ -78,6 +142,36 @@ class BayesFilter:
 
         # bayes assignment
         # YOUR CODE HERE
+        n_bins = len(self.probabilities)
+        new_probs = np.zeros(n_bins, dtype=float)
+
+        # Get motion model for command "move_right"
+        move_model = robot_ground_truth.move_probabilities["move_right"]
+        p_left = move_model["left"]
+        p_right = move_model["right"]
+        p_stay = move_model["stay"]
+
+        for j, p_prev in enumerate(self.probabilities):
+            # Try to move left (wrong direction)
+            target = j - 1
+            if target < 0:
+                target = j
+            new_probs[target] += p_prev * p_left
+
+            # Try to move right
+            target = j + 1
+            if target >= n_bins:
+                target = j
+            new_probs[target] += p_prev * p_right
+
+            # Stay put
+            new_probs[j] += p_prev * p_stay
+
+        total = np.sum(new_probs)
+        if total > 0.0:
+            new_probs /= total
+
+        self.probabilities = new_probs
 
     def one_full_update(self, world_ground_truth, robot_ground_truth, robot_sensor, u: str, z: bool):
         """This is the full update loop that takes in one action, followed by a sensor reading
@@ -96,7 +190,16 @@ class BayesFilter:
         #  Step 1 predict: update your belief by the action (call one of update_belief_move_left or update_belief_move_right)
         #  Step 2 correct: do the correction step (update belief by the sensor reading)
         # YOUR CODE HERE
+        # Step 1: predict (action update)
+        if u == "move_left":
+            self.update_belief_move_left(robot_ground_truth)
+        elif u == "move_right":
+            self.update_belief_move_right(robot_ground_truth)
+        else:
+            raise ValueError(f"Unknown action u: {u}")
 
+        # Step 2: correct (sensor update)
+        self.update_belief_sensor_reading(world_ground_truth, robot_sensor, z)
 
 def check_uniform(bf):
     """ At the start, should be uniform probability

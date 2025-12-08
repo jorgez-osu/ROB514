@@ -35,6 +35,15 @@ def vector_to_goal(arm_with_angles, target):
     #   Get the gripper/grasp location using get_gripper_location
     #   Calculate and return the vector
     # YOUR CODE HERE
+    # added by JZ begin
+    # Get current gripper location (x, y)
+    gx, gy = afk.get_gripper_location(arm_with_angles)
+    gripper = np.array([gx, gy])
+
+    # Vector from gripper to target
+    return target - gripper
+    # added by JZ end
+
 
 
 def distance_to_goal(arm_with_angles, target):
@@ -50,6 +59,10 @@ def distance_to_goal(arm_with_angles, target):
 
     # TODO: Call the function above, then return the vector's length
     # YOUR CODE HERE
+    # addedy by JZ begin
+    vec = vector_to_goal(arm_with_angles, target)
+    return np.linalg.norm(vec)
+    # added by JZ end
 
 
 def calculate_gradient(arm, angles, target):
@@ -78,7 +91,42 @@ def calculate_gradient(arm, angles, target):
     # Step 3: Do the wrist/gripper angle the same way (but remember, that angle
     #   is stored in angles[-1][0])
     # YOUR CODE HERE
-    return derivs
+    # added by JZ begin
+    # Helper fcn to deep-copy the angles list (including the last nested list)
+    def copy_angles(angs):
+        new = list(angs)
+        if len(new) > 0 and isinstance(new[-1], list):
+            new[-1] = list(new[-1])
+        return new
+
+    # Step 1: calculate f(x) with current angles
+    afk.set_angles_of_arm_geometry(arm, angles)
+    f_x = distance_to_goal(arm, target)
+
+    # Number of columns in Jacobian/number of DOF we care about:
+    #  all link angles + wrist (not fingers)
+    n_links = len(angles) - 1  # links (0..n_links-1)
+    derivs = []
+
+    # Step 2: derivatives w.r.t. each link angle
+    for i in range(n_links):
+        angs_h = copy_angles(angles)
+        angs_h[i] += h
+        afk.set_angles_of_arm_geometry(arm, angs_h)
+        f_xh = distance_to_goal(arm, target)
+        derivs.append((f_xh - f_x) / h)
+
+    # Step 3: derivative w.r.t. wrist angle (angles[-1][0])
+    angs_h = copy_angles(angles)
+    angs_h[-1][0] += h
+    afk.set_angles_of_arm_geometry(arm, angs_h)
+    f_xh = distance_to_goal(arm, target)
+    derivs.append((f_xh - f_x) / h)
+
+    # Return as numpy array (easier to use later)
+    return np.array(derivs)
+    # added by JZ end
+    # return derivs commented out by JZ
 
 
 # ------------------------ Gradient descent -----------------
@@ -120,6 +168,11 @@ def gradient_descent(arm, angles, target, b_one_step=True) -> tuple:
         # First, calculate the gradiant with the current angles
         # TODO: Calculate the gradient with angles (don't for get to set the angles first)
         # YOUR CODE HERE
+        # added by JZ begin
+        # Make sure the arm uses the current angles, then compute gradient
+        afk.set_angles_of_arm_geometry(arm, angles)
+        gradient = calculate_gradient(arm, angles, target)
+        # added by JZ end
 
         # This is the while loop where you keep "shrinking" the step size until you get closer to the goal (if
         #  you ever do)
@@ -139,7 +192,17 @@ def gradient_descent(arm, angles, target, b_one_step=True) -> tuple:
             #  We go in the OPPOSITE direction of the gradient because we want to DECREASE distance
             new_angles = []
             # YOUR CODE HERE
+            # added by JZ begin
+            # All link angles (0 .. len(angles)-2)
+            for i in range(len(angles) - 1):
+                new_angles.append(angles[i] - step_size * gradient[i])
 
+            # Wrist (angles[-1][0]) moves with gradient; fingers stay the same
+            wrist_ang = angles[-1][0] - step_size * gradient[-1]
+            finger1 = angles[-1][1]
+            finger2 = angles[-1][2]
+            new_angles.append([wrist_ang, finger1, finger2])
+            # added by JZ end
             # Now we see how we did
             afk.set_angles_of_arm_geometry(arm, new_angles)
             new_dist = distance_to_goal(arm, target)
@@ -150,6 +213,17 @@ def gradient_descent(arm, angles, target, b_one_step=True) -> tuple:
             #     set angles to be new_angles and best_distance to be new_distance
             #     set b_found_better to be True
             # YOUR CODE HERE
+            # added by JZ begin
+            if new_dist > best_distance:
+                # Got worse → try a smaller step
+                step_size *= 0.5
+            else:
+                # Improvement! accept this step
+                b_took_one_step = True
+                angles = new_angles
+                best_distance = new_dist
+                b_found_better = True
+            # added by JZ end
             # Count iterations
             count_iterations += 1
 
