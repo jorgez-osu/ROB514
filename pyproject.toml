@@ -3,5 +3,6 @@ name = "rob514"
 version = "0.1.0"
 requires-python = ">=3.12.7"
 dependencies = [
+    "empy>=4.2",
     "pyqt5>=5.15.11",
 ]
