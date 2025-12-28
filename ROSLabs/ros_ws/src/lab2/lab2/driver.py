@@ -49,7 +49,7 @@ import time
 
 
 class Lab2Driver(Node):
-	def __init__(self, threshold=0.2):
+	def __init__(self, threshold=0.20):
 		""" We have parameters this time
 		@param threshold - how close do you have to be before saying you're at the goal? Set to width of robot
 		"""
@@ -102,7 +102,7 @@ class Lab2Driver(Node):
 		self.target.point.y = 0.0
 
 		# GUIDE: Declare any variables here
-  # YOUR CODE HERE
+  		# YOUR CODE HERE
 
 		# Timer to make sure we publish the target marker (once we get a goal)
 		self.marker_timer = self.create_timer(1.0, self._marker_callback)
@@ -190,8 +190,20 @@ class Lab2Driver(Node):
 		""" Return true if close enough to goal. This will be used in action_callback to stop moving toward the goal
 		@ return true/false """
 
-  # YOUR CODE HERE
-		return False
+  	# YOUR CODE HERE
+		if self.target is None:
+			return False
+
+		# Distance in robot frame
+		dx = self.target.point.x
+		dy = self.target.point.y
+		dist = sqrt(dx*dx + dy*dy)
+
+		# self.threshold comes from __init__ (default 0.2)
+		close = dist < self.threshold
+		if close:
+			self.get_logger().info(f"Close enough to target: dist={dist:.3f}")
+		return close
 
 	def distance_to_target(self):
 		""" Communicate with send points - set to distance to target"""
@@ -283,8 +295,8 @@ class Lab2Driver(Node):
 			self.target = None		
 		
 		# GUIDE: Calculate any additional variables here
-		#  Remember that the target's location is in its own coordinate frame at 0,0, angle 0 (x-axis)
-  # YOUR CODE HERE
+		# Remember that the target's location is in its own coordinate frame at 0,0, angle 0 (x-axis)
+  		# YOUR CODE HERE
 
 		return self.target
 
@@ -317,12 +329,81 @@ class Lab2Driver(Node):
 		@return Currently True/False and speed, angular turn"""
 
 		if not self.target:
-			return False, 0.0, 0.0
+			return False, 1.0, 0.0
 		
 		# GUIDE: Use this method to collect obstacle information - is something in front of, to the left, or to 
 		# the right of the robot? Start with your stopper code from Lab1
-  # YOUR CODE HERE
-		return False, 0.0, 0.0
+  		# YOUR CODE HERE
+		ranges = np.array(scan.ranges)
+
+		# Replace inf / NaN with a large number so min() works
+		ranges = np.where(np.isfinite(ranges), ranges, 10.0)
+
+		n = len(ranges)
+		if n == 0:
+			return False, 1.0, 0.0
+
+		# Heuristic sectors: front, left, right
+		# This assumes 0 index is roughly one side and ranges wrap around.
+		# You can tweak indices based on what you used in Lab 1 stopper.py.
+		front_width = int(n * 0.1)      # 10% of beams as "front"
+		left_width  = int(n * 0.2)      # 20% as "left"
+		right_width = int(n * 0.2)      # 20% as "right"
+
+		# Center indices
+		center = n // 2
+		front_start = center - front_width // 2
+		front_end   = center + front_width // 2
+
+		# Left: upper part of scan
+		left_start = front_end
+		left_end   = min(n, left_start + left_width)
+
+		# Right: lower part of scan
+		right_end   = front_start
+		right_start = max(0, right_end - right_width)
+
+		front_min = float(np.min(ranges[front_start:front_end]))
+		left_min  = float(np.min(ranges[left_start:left_end]))
+		right_min = float(np.min(ranges[right_start:right_end]))
+
+		# Threshold for "too close"
+		obs_thresh = 1.1  # meters, tune as needed
+
+		front_blocked = front_min < obs_thresh
+		left_blocked  = left_min  < obs_thresh
+		right_blocked = right_min < obs_thresh
+
+		has_obstacle = front_blocked or left_blocked or right_blocked
+
+		lin_scale = 1.0
+		ang_bias = 0.0
+
+		if not has_obstacle:
+			return False, lin_scale, ang_bias
+
+		# Basic logic:
+		# - If something is directly in front, turn away from the closer side.
+		# - If only left is close, turn right a bit.
+		# - If only right is close, turn left a bit.
+		turn_strength = np.pi * 0.4   # ~4 deg per update
+
+		if front_blocked:
+			lin_scale = 0.0  # stop advancing
+			# Turn to the side with more space
+			if left_min > right_min:
+				ang_bias = +turn_strength
+			else:
+				ang_bias = -turn_strength
+		else:
+			# No front obstacle, but something on a side
+			if left_blocked and not right_blocked:
+				ang_bias = -turn_strength * 0.5   # steer right
+			elif right_blocked and not left_blocked:
+				ang_bias = +turn_strength * 0.5   # steer left
+			# If both blocked but not front, keep lin_scale and ang_bias = 0 for now
+
+		return True, lin_scale, ang_bias
 
 	def get_twist(self, scan):
 		"""This is the method that calculate the twist
@@ -345,10 +426,69 @@ class Lab2Driver(Node):
 		max_speed = 0.2         # This moves about 0.01 m between scans
 		max_turn = np.pi * 0.1  # This turns about 2 degrees between scans
 
-  # YOUR CODE HERE
+  		# YOUR CODE HERE
+		  
+		# === Step 1: move toward the target (empty world behavior) ===
 
-		# t.twist.linear.x = max_speed
-		# t.twist.angular.z = 0.0
+		# If we somehow don't have a target, stop
+		if self.target is None:
+			self.get_logger().info("No target in get_twist; staying still")
+			self.get_logger().info(f"Setting twist forward {t.twist.linear.x} angle {t.twist.angular.z}")
+			return t
+
+		# Target in robot frame
+		tx = self.target.point.x
+		ty = self.target.point.y
+
+		# Step 1) angle from robot forward (x-axis) to target
+		angle = atan2(ty, tx)
+		dist = sqrt(tx*tx + ty*ty)
+
+		# Angular velocity: turn toward the target
+		k_ang = 1.0
+		raw_ang = k_ang * angle
+		if raw_ang > max_turn:
+			ang_z = max_turn
+		elif raw_ang < -max_turn:
+			ang_z = -max_turn
+		else:
+			ang_z = raw_ang
+
+		# Linear velocity: go forward if target is in front and fairly aligned
+		if tx <= 0.0:
+			# Target is behind; just turn in place
+			lin_x = 0.0
+		else:
+			# Slow down if angle is large
+			# When |angle| is small -> near 1; when large -> near 0
+			angle_scale = max(0.0, 1.0 - fabs(angle) / (pi / 2.0))
+
+			# Also slow down as we get close to the goal
+			# For example, within 0.7 m start ramping speed down
+			dist_scale = 1.0
+			if dist < 0.7:
+				# dist / 0.7 goes from ~1 down toward 0 as we approach
+				dist_scale = max(0.1, dist / 0.7)
+
+			if dist < self.threshold:
+				lin_x = 0.0
+			else:
+				raw_lin = max_speed * angle_scale * dist_scale
+				lin_x = max(min_speed, raw_lin)
+
+		# === Step 2: obstacle avoidance using the laser scan ===
+		
+		# Uses get_obstacle(scan) to modify lin_x and ang_z around obstacles
+		has_obs, lin_scale, ang_bias = self.get_obstacle(scan)
+		if has_obs:
+			# Reduce forward speed and add turning bias
+			lin_x *= lin_scale
+			ang_z += ang_bias
+
+		# Apply the final commands
+		t.twist.linear.x = lin_x
+		t.twist.angular.z = ang_z
+
 		self.get_logger().info(f"Setting twist forward {t.twist.linear.x} angle {t.twist.angular.z}")
 		return t			
 
