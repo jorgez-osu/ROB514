@@ -201,6 +201,44 @@ def dijkstra(im, robot_loc, goal_loc):
         #  Lec : Planning, at the end
         #  https://docs.google.com/presentation/d/1pt8AcSKS2TbKpTAVV190pRHgS_M38ldtHQHIltcYH6Y/edit#slide=id.g18d0c3a1e7d_0_0
         # YOUR CODE HERE
+        
+        # Step 1: if this node is the goal, we are done
+        if current_node_ij == goal_loc:
+            break
+
+        # Step 2: if this node is already closed, skip it
+        if visited_closed_yn:
+            continue
+
+        # Step 3: mark this node as closed
+        visited[current_node_ij] = (visited_distance, visited_parent, True)
+
+        # Explore all 8-connected neighbors
+        for neigh in eight_connected(current_node_ij):
+            x, y = neigh
+
+            # Skip neighbors that are outside the image bounds
+            if x < 0 or x >= im.shape[1] or y < 0 or y >= im.shape[0]:
+                continue
+
+            # Skip neighbors that are not free space
+            if not is_free(im, neigh):
+                continue
+
+            # Cost to move to a neighbor: each step costs 1
+            new_dist = visited_distance + 1
+
+            if neigh not in visited:
+                # First time we see this neighbor
+                visited[neigh] = (new_dist, current_node_ij, False)
+                heapq.heappush(priority_queue, (new_dist, neigh))
+            else:
+                old_dist, old_parent, old_closed = visited[neigh]
+                # Found a shorter path to an already-seen neighbor
+                if new_dist < old_dist:
+                    visited[neigh] = (new_dist, current_node_ij, old_closed)
+                    heapq.heappush(priority_queue, (new_dist, neigh))
+
 
     # Now check that we actually found the goal node
     try_2 = goal_loc
@@ -214,6 +252,17 @@ def dijkstra(im, robot_loc, goal_loc):
     path.append(goal_loc)
     # GUIDE: Build the path by starting at the goal node and working backwards
     # YOUR CODE HERE
+    current = goal_loc
+    # Work backwards from goal to start using the parent pointers
+    while True:
+        parent = visited[current][1]
+        if parent is None:
+            break
+        path.append(parent)
+        current = parent
+
+    # We built the path from goal to start, so reverse it
+    path.reverse()
 
     return path
 
@@ -225,12 +274,13 @@ def open_image(im_name):
 
     # Using imageio to read in the image
     import imageio.v2 as imageio
+    # yaml for file format
     import yaml as yaml
 
     # Needed for reading in map info
     from os import open
 
-    im = imageio.imread("Data/" + im_name)
+    im = imageio.imread("Data/" + im_name) # changed Path TMP
 
     wall_threshold = 0.7
     free_threshold = 0.9
