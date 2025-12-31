@@ -61,7 +61,7 @@ def generate_launch_description():
      # If using stage world only, this is where cave lives
     stage_world_arg = DeclareLaunchArgument(
         'world',
-        default_value=TextSubstitution(text='simple'),
+        default_value=TextSubstitution(text='simple2'),
         description='World file relative to the project world file, without .world')
     ld.add_action(stage_world_arg)
    

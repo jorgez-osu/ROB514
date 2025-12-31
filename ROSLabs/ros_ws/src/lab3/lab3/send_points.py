@@ -158,14 +158,18 @@ class SendPoints(Node):
 		self.get_logger().info(f'Feedback: Distance: {feedback.feedback.distance.data}')
 
 	def _set_goal_markers(self):
-		""" Update the goal markers whenever the goals change"""
-		if self.goal_markers == None:
+		"""Update the goal markers whenever the goals change."""
+		self.get_logger().info("Updating goal markers")
+
+		if self.goal_markers is None:
 			self.goal_markers = MarkerArray()
 
 		# Lock while we make the Marker Array
 		with self.mutex:
+			# Line through all goal points
 			line_marker = Marker()
-			line_marker.header.frame_id = 'odom'
+			#line_marker.header.frame_id = 'odom'
+			line_marker.header.frame_id = 'map'
 			line_marker.header.stamp = self.get_clock().now().to_msg()
 			line_marker.type = Marker.LINE_STRIP
 			line_marker.action = Marker.ADD
@@ -184,15 +188,16 @@ class SendPoints(Node):
 				pt.y = p[1]
 				pt.z = 0.0
 				line_marker.points.append(pt)
-			
-			# Make the line(s) between the markers
+
+			# Reset markers array and add the line
 			self.goal_markers.markers = []
 			self.goal_markers.markers.append(line_marker)
 
-			# Make the dots for the markers
+			# Blue spheres at each goal point
 			for indx, point in enumerate(self.points):
 				marker = Marker()
-				marker.header.frame_id = 'odom'
+				#marker.header.frame_id = 'odom'
+				marker.header.frame_id = 'map'
 				marker.header.stamp = self.get_clock().now().to_msg()
 				marker.id = line_marker.id + indx + 1
 				marker.type = Marker.SPHERE
@@ -202,7 +207,7 @@ class SendPoints(Node):
 				marker.pose.position.z = 0.0
 				marker.pose.orientation.x = 0.0
 				marker.pose.orientation.y = 0.0
-				marker.pose.orientation.z = 0.0		
+				marker.pose.orientation.z = 0.0
 				marker.pose.orientation.w = 1.0
 				marker.scale.x = 0.2
 				marker.scale.y = 0.2
@@ -211,10 +216,52 @@ class SendPoints(Node):
 				marker.color.g = 0.0
 				marker.color.b = 1.0
 				marker.color.a = 1.0
-
 				self.goal_markers.markers.append(marker)
 
-		# Actually publish the list
+			# START and END labels (text markers)
+			if self.points:
+				start_x, start_y = self.points[0]
+				end_x, end_y = self.points[-1]
+
+				# START in red
+				start_marker = Marker()
+				#start_marker.header.frame_id = 'odom'
+				start_marker.header.frame_id = 'map'
+				start_marker.header.stamp = self.get_clock().now().to_msg()
+				start_marker.id = 90000
+				start_marker.type = Marker.TEXT_VIEW_FACING
+				start_marker.action = Marker.ADD
+				start_marker.pose.position.x = start_x
+				start_marker.pose.position.y = start_y
+				start_marker.pose.position.z = 0.5
+				start_marker.scale.z = 0.4
+				start_marker.color.r = 1.0
+				start_marker.color.g = 0.0
+				start_marker.color.b = 0.0
+				start_marker.color.a = 1.0
+				start_marker.text = "START"
+				self.goal_markers.markers.append(start_marker)
+
+				# END in green
+				end_marker = Marker()
+				#end_marker.header.frame_id = 'odom'
+				end_marker.header.frame_id = 'map'
+				end_marker.header.stamp = self.get_clock().now().to_msg()
+				end_marker.id = 90001
+				end_marker.type = Marker.TEXT_VIEW_FACING
+				end_marker.action = Marker.ADD
+				end_marker.pose.position.x = end_x
+				end_marker.pose.position.y = end_y
+				end_marker.pose.position.z = 0.5
+				end_marker.scale.z = 0.4
+				end_marker.color.r = 0.0
+				end_marker.color.g = 1.0
+				end_marker.color.b = 0.0
+				end_marker.color.a = 1.0
+				end_marker.text = "END"
+				self.goal_markers.markers.append(end_marker)
+
+		# Publish all markers
 		self.goal_marker_pub.publish(self.goal_markers)
 
 	def _set_path_markers(self, path_list, skip=5):
@@ -227,7 +274,8 @@ class SendPoints(Node):
 		# Lock while we make the Marker Array
 		with self.mutex:
 			line_marker = Marker()
-			line_marker.header.frame_id = 'odom'
+			#line_marker.header.frame_id = 'odom'
+			line_marker.header.frame_id = 'map'
 			line_marker.header.stamp = self.get_clock().now().to_msg()
 			line_marker.type = Marker.LINE_STRIP
 			line_marker.action = Marker.ADD
@@ -254,7 +302,8 @@ class SendPoints(Node):
 			# Make the dots for the markers
 			for indx, point in enumerate(path_list[0::skip]):
 				marker = Marker()
-				marker.header.frame_id = 'odom'
+				#marker.header.frame_id = 'odom'
+				marker.header.frame_id = 'map'
 				marker.header.stamp = self.get_clock().now().to_msg()
 				marker.id = line_marker.id + indx + 1
 				marker.type = Marker.SPHERE
@@ -293,7 +342,8 @@ class SendPoints(Node):
 			# Make the dots for the markers
 			for indx, point in enumerate(points):
 				marker = Marker()
-				marker.header.frame_id = 'odom'
+				#marker.header.frame_id = 'odom'
+				marker.header.frame_id = 'map'
 				marker.header.stamp = self.get_clock().now().to_msg()
 				marker.id = 10000 + indx + 1
 				marker.type = Marker.SPHERE
@@ -327,15 +377,14 @@ class SendPoints(Node):
 		@param map_msg - the map
 		@param pt_xy - a tuple with an x,y in it
 		@return pt_uv - point in the image"""
+		"""Map (world) → image pixel (u,v)."""
 		info = map_msg.info
 
-		im_u = 0
-		im_v = 0
+		# Compute image (u,v) from map (x,y)
+		x, y = pt_xy
+		im_u = int((x - info.origin.position.x) / info.resolution)
+		im_v = int((y - info.origin.position.y) / info.resolution)
 
-		# GUIDE: Subtract the origin position of the map and then divide by the resolution
-		#   Don't forget to cast to an int
-  # YOUR CODE HERE
-		
 		# self.get_logger().info(f"before {pt_xy} after {im_u}, {im_v}")
 		return (im_u, im_v)
 			
@@ -344,12 +393,18 @@ class SendPoints(Node):
 		@param map_msg - the map
 		@param pt_uv - a tuple with a u,v in width/height in it
 		@return pt_xy - point in the world"""
+		"""Image pixel (u,v) → map (world) x,y."""
+
 		info = map_msg.info
 
 		pt_x = 0.0
 		pt_y = 0.0
-		# GUIDE: Multiply by the resolution then add the origin position of the map 
-  # YOUR CODE HERE
+
+		# Multiply by the resolution then add the origin position of the map
+		u, v = pt_uv
+		pt_x = float(info.origin.position.x) + float(u) * float(info.resolution)
+		pt_y = float(info.origin.position.y) + float(v) * float(info.resolution)
+
 		# self.get_logger().info(f"before {pt_uv} after {pt_x}, {pt_y}")
 		return (pt_x, pt_y)
 
@@ -374,7 +429,7 @@ class SendPoints(Node):
 		self.get_logger().info(f"N free {np.count_nonzero(im_thresh == 255)}, N walls {np.count_nonzero(im_thresh == 0)}, N {np.count_nonzero(im_thresh == 128)}")
 
 		# Location of robot
-		transform = self.tf_buffer.lookup_transform('odom', 'base_link', rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0))
+		transform = self.tf_buffer.lookup_transform('map', 'base_link', rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=1.0))
 		robot_current_loc_in_map = (transform.transform.translation.x, transform.transform.translation.y)
 		robot_current_loc_in_image = self.from_map_to_image(map_msg=map_msg, pt_xy=robot_current_loc_in_map)
 		self.get_logger().info(f"Robot current location {robot_current_loc_in_map}")
@@ -410,7 +465,7 @@ class SendPoints(Node):
 		# GUIDE: Change this to get just the points you might consider looking at
 		all_unseen = find_all_possible_goals(im_thresh)
 		reachable_pts = []
-		for k, _ in all_unseen.items():
+		for k in all_unseen:
 			map_xy = self.from_image_to_map(map_msg=map_msg, pt_uv=k)
 			reachable_pts.append(map_xy)
 
@@ -423,7 +478,7 @@ def main(args=None):
 	rclpy.init(args=args)
 
 	# Create a list of points that will take the robot through the map
-	points = [(-4.5, -3.0), (-4.5, 0.0), (1.0, 0.0)]
+	points = [(-4.5, -3.0), (-4.5, 0.0), (1.0, 0.0), (4.5, 4.5)]
 	send_points = SendPoints(points)
 
 	# Multi-threaded execution

@@ -1,0 +1,58 @@
+# simple2.world - simple_rooms with START/END boxes
+# Based on simple.world from ROB514 Stage worlds made by Bill Smart
+
+include "include/pioneer.inc"
+include "include/map.inc"
+include "include/sick.inc"
+include "include/box.inc"
+
+resolution 0.02
+speedup 1
+
+window
+(
+  size [ 635.000 666.000 ]
+  scale 36.995
+  center [ -0.040  -0.274 ]
+  rotate [ 0  0 ]
+  show_data 1
+)
+
+floorplan
+(
+  name "simple_rooms"
+  size [16.000 16.000 0.800]
+  pose [0 0 0 0]
+  bitmap "bitmaps/simple_rooms.png"
+)
+
+pioneer2dx_base_no_sonar
+(
+  name "robot"
+  pose [ -6 -6 0 0.000 ]
+  sicklaser( pose [ 0 0 0 0 ] )
+  trail_length 400
+)
+
+# Red START box at (4.5, 4.0)
+box
+(
+  name "START_box"
+  pose [ -6.5 -6.5 0 0 ]
+  size [ 0.3 0.3 0.5 ]
+  color "red"
+)
+
+# Green END box at (4.5, 4.0) – slightly offset in z so it’s visible on top
+box
+(
+  name "END_box"
+  pose [ 5.5 5.5 0 0 ]
+  size [ 0.3 0.3 0.5 ]
+  color "green"
+)
+
+# Blue Obstacle boxes
+box(name "box3" pose [ 0.5 0.5 0 0 ])
+box(name "box1" pose [ -4.5 -4 0 0 ])
+box(name "box2" pose [ -3 -0.5 0 0 ])
